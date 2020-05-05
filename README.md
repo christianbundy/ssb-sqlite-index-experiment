@@ -2,17 +2,19 @@
 
 Is it practical to use sqlite as an index for SSB messages?
 
-With the help of Christian Bundy!  See [ssb-sqlite](https://github.com/christianbundy/ssb-sqlite) for his take on this.  He used an ORM (sequelize), I used raw SQL.
+With the help of Christian Bundy! See [ssb-sqlite](https://github.com/christianbundy/ssb-sqlite) for his take on this. He used an ORM (sequelize), I used raw SQL.
 
 ## Benchmark
 
 Input file:
-* 1 million messages as newline-delimited JSON, 740 mb
+
+- 1 million messages as newline-delimited JSON, 740 mb
 
 Output file:
-* sqlite file, 645 mb on disk
 
-Timings on a 2013 iMac.  Experimenting with different numbers of messages to insert in each transaction.
+- sqlite file, 645 mb on disk
+
+Timings on a 2013 iMac. Experimenting with different numbers of messages to insert in each transaction.
 
 ```
 commit transaction every 100,000 messages
@@ -39,6 +41,7 @@ commit transaction every 100 messages
 Max memory usage: 79 mb, about the same for all the transaction sizes.
 
 ## Database Schema
+
 ```
 CREATE TABLE IF NOT EXISTS msgs (
     key TEXT NOT NULL PRIMARY KEY,
@@ -55,7 +58,9 @@ CREATE TABLE IF NOT EXISTS authors (
     image TEXT
 );
 ```
-Example row from `msgs`.  Note the `content` field is a string holding encoded JSON.
+
+Example row from `msgs`. Note the `content` field is a string holding encoded JSON.
+
 ```
               key = %ox6s...............redacted................=.sha256
   previousMessage = %d6Jk.......................................=.sha256
@@ -66,6 +71,7 @@ timestampAsserted = 1505676293841
 ```
 
 Example row from `authors`.
+
 ```
         key = @fBS9..............redacted.................=.ed25519
        name = cinnamon
