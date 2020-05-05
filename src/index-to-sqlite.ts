@@ -30,21 +30,22 @@ let main = async () => {
 
     //log('preparing database');
     db.prepare(`
-        CREATE TABLE IF NOT EXISTS msgs (
-            key TEXT NOT NULL PRIMARY KEY,
-            previousMessage TEXT,
-            author TEXT,
-            content TEXT,
-            timestampReceived NUMBER,
-            timestampAsserted NUMBER
-        );
-    `).run();
-    db.prepare(`
         CREATE TABLE IF NOT EXISTS authors (
-            key TEXT NOT NULL PRIMARY KEY,
+            key VARCHAR(53) PRIMARY KEY,
             name TEXT,
             description TEXT,
             image TEXT
+        );
+    `).run();
+
+    db.prepare(`
+        CREATE TABLE IF NOT EXISTS msgs (
+            key VARCHAR(52) NOT NULL PRIMARY KEY,
+            sequence INTEGER NOT NULL,
+	    author VARCHAR(53) NOT NULL,
+            content TEXT NOT NULL,
+            timestampReceived NUMBER,
+            timestampAsserted NUMBER NOT NULL
         );
     `).run();
 
@@ -59,14 +60,14 @@ let main = async () => {
     let insertMsgSt = db.prepare(`
         INSERT OR REPLACE INTO msgs (
             key,
-            previousMessage,
+            sequence,
             author,
             content,
             timestampReceived,
             timestampAsserted
         ) VALUES (
             ?, -- key
-            ?, -- previousMessage
+            ?, -- sequence
             ?, -- author
             ?, -- content
             ?, -- timestampReceived
@@ -77,78 +78,57 @@ let main = async () => {
         SELECT * FROM authors WHERE key = ?;
     `);
     let insertAuthorSt = db.prepare(`
-        INSERT OR REPLACE INTO authors (
-            key,
-            name,
-            description,
-            image
+        INSERT OR IGNORE INTO authors (
+            key
         ) VALUES (
-            ?, -- key
-            ?, -- name
-            ?, -- description
-            ? -- image
+            ? -- key
         );
     `);
+
+    let updateNameSt = db.prepare(`UPDATE authors SET name = ? WHERE key = ?`);
+    let updateImageSt = db.prepare(`UPDATE authors SET image = ? WHERE key = ?`);
+    let updateDescriptionSt = db.prepare(`UPDATE authors SET description = ? WHERE key = ?`);
+
     let beginSt = db.prepare(`BEGIN IMMEDIATE;`);
     let commitSt = db.prepare(`COMMIT;`);
 
     let ingestMsg = (msg : SSBMessage) : void => {
+	if (msg.value.previous === null) {
+          insertAuthorSt.run(
+              msg.value.author
+          );
+	}
+
         // msgs table
         insertMsgSt.run(
             msg.key,
-            msg.value.previous,
+            msg.value.sequence,
             msg.value.author,
             JSON.stringify(msg.value.content),
             msg.timestamp,  // received
             msg.value.timestamp,  // asserted
         );
 
+
         // authors table
         if (msg.value.content.type === 'about') {
             let content = msg.value.content;
-            if (typeof content.about === 'string') {
-                // first fetch existing about row, if there is one
-                let result = getAuthorSt.get(content.about);
-                // otherwise start with a default
-                if (result === undefined) {
-                    result = {
-                        key: content.about,
-                        name: '',
-                        description: '',
-                        image: ''
-                    };
-                }
 
+	    // Only set properties when the author is describing themselves.
+            if (typeof content.about === 'string' && content.about === msg.value.author) {
                 // update the row with new values
                 if (typeof content.name === 'string' && content.name !== '') {
-                    result.name = content.name;
+		  updateNameSt.run(content.name, msg.value.author)
                 }
 
                 if (typeof content.description === 'string' && content.description !== '') {
-                    result.description = content.description;
+                    updateDescriptionSt.run(content.description, msg.value.author)
                 }
 
                 if (content.image !== null && typeof content.image === 'object' && typeof content.image.link === 'string' && content.image.link !== '') {
-                    result.image = content.image.link;
+                    updateImageSt.run(content.image.link, msg.value.author)
                 } else if (typeof content.image === 'string' && content.image !== '') {
-                    result.image = content.image;
-                }
-
-                // insert-or-replace it back to the database
-                try {
-                    insertAuthorSt.run(
-                        result.key,
-                        result.name,
-                        result.description,
-                        result.image
-                    )
-                } catch (e) {
-                    log('weird about message:');
-                    log(content);
-                    log(e)
-                    log('-----------------');
-                    log('-----------------');
-                    log('-----------------');
+                    updateImageSt.run(content.image, msg.value.author)
                 }
             }
         }

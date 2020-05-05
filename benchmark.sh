@@ -1,6 +1,8 @@
 #!/bin/sh
 
 echo ====================================
+node build/index-to-sqlite.js 10000000 1000000
+echo ====================================
 node build/index-to-sqlite.js 1000000 100000
 echo ====================================
 node build/index-to-sqlite.js 1000000 10000
